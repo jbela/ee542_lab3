@@ -1,0 +1,21 @@
+diff --git a/net/ipv4/tcp_timer.c b/net/ipv4/tcp_timer.c
+--- a/net/ipv4/tcp_timer.c
++++ b/net/ipv4/tcp_timer.c
+@@ -624,7 +624,16 @@ void tcp_retransmit_timer(struct sock *sk)
+ 			__NET_INC_STATS(sock_net(sk), mib_idx);
+ 	}
+
+-	tcp_enter_loss(sk);
++	{
++		u32 saved_cwnd = tcp_snd_cwnd(tp);
++		u32 saved_ssthresh = tp->snd_ssthresh;
++
++		tcp_enter_loss(sk);
++
++		/* Experimental: preserve congestion window on lossy links */
++		tcp_snd_cwnd_set(tp, saved_cwnd);
++		tp->snd_ssthresh = saved_ssthresh;
++	}
+
+ 	tcp_update_rto_stats(sk);
+ 	if (tcp_retransmit_skb(sk, tcp_rtx_queue_head(sk), 1) > 0) {
