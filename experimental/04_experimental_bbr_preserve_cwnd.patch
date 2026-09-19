@@ -1,0 +1,43 @@
+From 84f16fb3fdb5fad4134e711ee661a6b0ba008536 Mon Sep 17 00:00:00 2001
+From: Ellie Roh <eunsungr@usc.edu>
+Date: Sat, 19 Sep 2026 09:30:39 +0000
+Subject: [PATCH] Preserve BBR cwnd during loss recovery
+
+---
+ net/ipv4/tcp_bbr.c | 12 +++++++-----
+ 1 file changed, 7 insertions(+), 5 deletions(-)
+
+diff --git a/net/ipv4/tcp_bbr.c b/net/ipv4/tcp_bbr.c
+index cb9db8e57..346d454c7 100644
+--- a/net/ipv4/tcp_bbr.c
++++ b/net/ipv4/tcp_bbr.c
+@@ -486,19 +486,21 @@ static bool bbr_set_cwnd_to_recover_or_restore(
+ 	u8 prev_state = bbr->prev_ca_state, state = inet_csk(sk)->icsk_ca_state;
+ 	u32 cwnd = tcp_snd_cwnd(tp);
+ 
+-	/* An ACK for P pkts should release at most 2*P packets. We do this
+-	 * in two steps. First, here we deduct the number of lost packets.
+-	 * Then, in bbr_set_cwnd() we slow start up toward the target cwnd.
++	/* Experimental: preserve the congestion window during loss recovery
++	 * on a high-random-loss path instead of shrinking cwnd for each loss.
+ 	 */
++	/* Experimental: preserve BBR cwnd under random packet loss */
++	/*
+ 	if (rs->losses > 0)
+ 		cwnd = max_t(s32, cwnd - rs->losses, 1);
++	*/
+ 
+ 	if (state == TCP_CA_Recovery && prev_state != TCP_CA_Recovery) {
+ 		/* Starting 1st round of Recovery, so do packet conservation. */
+ 		bbr->packet_conservation = 1;
+ 		bbr->next_rtt_delivered = tp->delivered;  /* start round now */
+-		/* Cut unused cwnd from app behavior, TSQ, or TSO deferral: */
+-		cwnd = tcp_packets_in_flight(tp) + acked;
++		/* Experimental: keep last known good cwnd during recovery */
++		cwnd = max(cwnd, bbr->prior_cwnd);
+ 	} else if (prev_state >= TCP_CA_Recovery && state < TCP_CA_Recovery) {
+ 		/* Exiting loss recovery; restore cwnd saved before recovery. */
+ 		cwnd = max(cwnd, bbr->prior_cwnd);
+-- 
+2.53.0
+
