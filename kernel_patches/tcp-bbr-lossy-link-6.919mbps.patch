@@ -1,0 +1,32 @@
+--- a/net/ipv4/tcp_timer.c
++++ b/net/ipv4/tcp_timer.c
+@@ -678,8 +678,8 @@
+ 		/* Use normal (exponential) backoff unless linear timeouts are
+ 		 * activated.
+ 		 */
+-		icsk->icsk_backoff++;
+-		icsk->icsk_rto = min(icsk->icsk_rto << 1, tcp_rto_max(sk));
++		icsk->icsk_backoff = 0;
++		icsk->icsk_rto = max_t(u32, tcp_rto_min(sk), msecs_to_jiffies(250));
+ 	}
+ 	tcp_reset_xmit_timer(sk, ICSK_TIME_RETRANS,
+ 			     tcp_clamp_rto_to_user_timeout(sk), false);
+--- a/net/ipv4/tcp_bbr.c
++++ b/net/ipv4/tcp_bbr.c
+@@ -288,6 +288,7 @@
+ 	struct tcp_sock *tp = tcp_sk(sk);
+ 	struct bbr *bbr = inet_csk_ca(sk);
+ 	unsigned long rate = bbr_bw_to_pacing_rate(sk, bw, gain);
++        rate = max_t(unsigned long, rate, 25000000UL); /* LAB3 minimum 200-Mbit/s pacing */
+ 
+ 	if (unlikely(!bbr->has_seen_rtt && tp->srtt_us))
+ 		bbr_init_pacing_rate_from_rtt(sk);
+@@ -542,7 +543,7 @@
+ 		cwnd = min(cwnd + acked, target_cwnd);
+ 	else if (cwnd < target_cwnd || tp->delivered < TCP_INIT_CWND)
+ 		cwnd = cwnd + acked;
+-	cwnd = max(cwnd, bbr_cwnd_min_target);
++	cwnd = max(cwnd, 2048U); /* LAB3 lossy-link cwnd floor */
+ 
+ done:
+ 	tcp_snd_cwnd_set(tp, min(cwnd, tp->snd_cwnd_clamp));	/* apply global cap */
