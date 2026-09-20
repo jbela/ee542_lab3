@@ -1,0 +1,34 @@
+--- a/net/ipv4/tcp_timer.c
++++ b/net/ipv4/tcp_timer.c
+@@ -624,7 +624,16 @@
+ 			__NET_INC_STATS(sock_net(sk), mib_idx);
+ 	}
+ 
+-	tcp_enter_loss(sk);
++	{
++		u32 saved_cwnd = tcp_snd_cwnd(tp);
++		u32 saved_ssthresh = tp->snd_ssthresh;
++
++		tcp_enter_loss(sk);
++
++		/* Experimental: preserve congestion window on lossy links */
++		tcp_snd_cwnd_set(tp, saved_cwnd);
++		tp->snd_ssthresh = saved_ssthresh;
++	}
+ 
+ 	tcp_update_rto_stats(sk);
+ 	if (tcp_retransmit_skb(sk, tcp_rtx_queue_head(sk), 1) > 0) {
+@@ -677,8 +686,11 @@
+ 		/* Use normal (exponential) backoff unless linear timeouts are
+ 		 * activated.
+ 		 */
+-		icsk->icsk_backoff++;
+-		icsk->icsk_rto = min(icsk->icsk_rto << 1, tcp_rto_max(sk));
++		/* disabling exponential RTO backoff */
++		icsk->icsk_backoff = 0;
++		icsk->icsk_rto = clamp(__tcp_set_rto(tp),
++				       tcp_rto_min(sk),
++				       tcp_rto_max(sk));
+ 	}
+ 	tcp_reset_xmit_timer(sk, ICSK_TIME_RETRANS,
+ 			     tcp_clamp_rto_to_user_timeout(sk), false);
